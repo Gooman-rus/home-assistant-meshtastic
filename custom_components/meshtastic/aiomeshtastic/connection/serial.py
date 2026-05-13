@@ -6,8 +6,10 @@ import asyncio
 import contextlib
 import re
 from asyncio import StreamReader, StreamReaderProtocol, StreamWriter
+from typing import cast
 
-import serialx
+import serial
+import serial_asyncio
 
 from custom_components.meshtastic.aiomeshtastic.connection import (
     ClientApiConnectionError,
@@ -36,7 +38,7 @@ class SerialConnection(StreamingClientTransport, asyncio.Protocol):
         loop = asyncio.get_running_loop()
         reader = StreamReader(loop=loop)
         protocol = StreamReaderProtocol(reader, loop=loop)
-        transport, _ = await serialx.create_serial_connection(
+        transport, _ = await serial_asyncio.create_serial_connection(
             loop,
             lambda: protocol,
             self._device,
@@ -84,6 +86,7 @@ class SerialConnection(StreamingClientTransport, asyncio.Protocol):
     async def _disconnect(self) -> None:
         if self._writer:
             self._writer.close()
+            cast("serial_asyncio.SerialTransport", self._writer.transport).serial.close()
             self._writer = None
             self._reader = None
 
@@ -121,7 +124,7 @@ class SerialConnection(StreamingClientTransport, asyncio.Protocol):
             if exactly is not None:
                 return await self._reader.readexactly(exactly)
             return await self._reader.read(n=n)
-        except (serialx.SerialException, OSError) as e:
+        except serial.serialutil.SerialException as e:
             raise SerialConnectionError from e
 
     async def _write_bytes(self, data: bytes) -> bool:
